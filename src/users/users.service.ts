@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { CreateUserDto } from "./dto/create-user.dto";
@@ -12,29 +12,56 @@ export class UsersService {
     private usersRepository: Repository<User>
   ) {}
 
-  create(userDto: CreateUserDto) {
+  async create(userDto: CreateUserDto) {
     const { name, password, email } = userDto;
-    const user = this.usersRepository.create({ name, password, email });
-    return this.usersRepository.save(user);
+
+    if (await this.usersRepository.findOneBy({ email }))
+      throw new BadRequestException({ error: "User Already Exist!" });
+
+    const userCreated = this.usersRepository.create({ name, password, email });
+
+    return this.usersRepository.save(userCreated);
   }
 
   findAll() {
     return this.usersRepository.find();
   }
 
-  findOne(email: string) {
-    return this.usersRepository.findOneBy({ email: email });
+  async findOne(email: string) {
+    const user = await this.usersRepository.findOneBy({ email });
+
+    if (!user) throw new BadRequestException({ error: "User not found" });
+
+    return user;
   }
 
-  update(emailOfUserToBeUpdated: string, updateUserDto: UpdateUserDto) {
+  async update(emailOfUserToBeUpdated: string, updateUserDto: UpdateUserDto) {
     const { email, name, password } = updateUserDto;
-    return this.usersRepository.update(
+
+    const userToBeUpdated = await this.usersRepository.findOneBy({
+      email: emailOfUserToBeUpdated,
+    });
+
+    if (!userToBeUpdated)
+      throw new BadRequestException({ error: "User not found" });
+
+    const updateResult = await this.usersRepository.update(
       { email: emailOfUserToBeUpdated },
       { email, name, password }
     );
+
+    if (!updateResult["affected"])
+      throw new BadRequestException({ error: "Something went wrong" });
+
+    return { message: "User updated successfully" };
   }
 
-  remove(email: string) {
-    return this.usersRepository.delete({ email });
+  async remove(email: string) {
+    const deleteResult = await this.usersRepository.delete({ email });
+
+    if (!deleteResult["affected"])
+      throw new BadRequestException({ error: "User not found" });
+
+    return { message: `User ${email} deleted successfully!` };
   }
 }
